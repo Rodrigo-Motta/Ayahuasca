@@ -1,19 +1,21 @@
 import os
 from utils import parcel, correlation_matrix, remove_triangle
 import pandas as pd
+import numpy as np
 
 path = r'/Users/rodrigo/Side-Projects/Ayahuasca/Data/Controle/'
 groups = os.listdir(path)
 groups.sort()
 df = pd.DataFrame()
 
-for group in groups[1]:
+for group in groups[1:]:
     subjects = os.listdir(path + group)
     subjects.sort()
     for subject in subjects[1:]:
         time = os.listdir(path + group + '/' + subject)
         time.sort()
-        for t in time[1:]:
+        time = [filename for filename in time if not filename.startswith('.')]
+        for t in time:
             file = os.listdir(path + group + '/' + subject + '/' + t)
             file.sort()
             if len(file) != 0:
@@ -27,6 +29,8 @@ for group in groups[1]:
                 df_aux['Time'] = t
                 df = pd.concat([df, df_aux], axis=0)
 
+
+df = df.replace(np.nan, 0.0)
 df.to_csv('/Users/rodrigo/Side-Projects/Ayahuasca/Data/corr_matrices.csv')
 
 

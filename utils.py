@@ -36,7 +36,34 @@ def parcel(file_path):
 
     cleaned_and_averaged_time_series = masker.fit_transform(test_load)
 
-    return pd.DataFrame(cleaned_and_averaged_time_series)
+    # Get the label numbers from the atlas
+    atlas_labels = np.unique(resampled_GOR.get_fdata().astype(int))
+
+    # Get number of labels that we have
+    NUM_LABELS = len(atlas_labels)
+
+    if NUM_LABELS != 333:
+
+        # Remember fMRI images are of size (x,y,z,t)
+        # where t is the number of timepoints
+        num_timepoints = test_load.shape[3]
+
+        # Create an array of zeros that has the correct size
+        final_signal = np.zeros((num_timepoints, 333 + 1))  # NUM_LABELS))
+
+        # Get regions that are kept
+        regions_kept = np.array(masker.labels_).astype(int)
+
+        # Fill columns matching labels with signal values
+        final_signal[:, regions_kept] = cleaned_and_averaged_time_series
+
+        # Excluding ROI = 0 that does not exist
+        final_signal = final_signal[:, 1:]
+
+        return final_signal
+
+    else:
+        return pd.DataFrame(cleaned_and_averaged_time_series)
 
 
 def correlation_matrix(df_time_series):
