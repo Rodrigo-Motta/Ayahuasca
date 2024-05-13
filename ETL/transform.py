@@ -1,9 +1,10 @@
 import os
-from utils import parcel, correlation_matrix, remove_triangle
+from utils import parcel, correlation_matrix, remove_triangle, parcel_exception
 import pandas as pd
 import numpy as np
 
 path = r'/Users/rodrigo/Side-Projects/Ayahuasca/Data/Controle/'
+parcel_path = '/Users/rodrigo/Side-Projects/Ayahuasca/Parcels_MNI_333.nii'
 groups = os.listdir(path)
 groups.sort()
 df = pd.DataFrame()
@@ -20,8 +21,11 @@ for group in groups[1:]:
             file.sort()
             if len(file) != 0:
                 nii_file = [filename for filename in file if filename.endswith('.nii')]
-
-                time_series = parcel(path + group + '/' + subject + '/' + t + '/' + nii_file[0])
+                img_path = path + group + '/' + subject + '/' + t + '/' + nii_file[0]
+                if all(word in img_path for word in ["Controle", "O", "before"]) == True:
+                    time_series = parcel_exception(img_path, parcel_path)
+                else:
+                    time_series = parcel(img_path,parcel_path)
                 corr = correlation_matrix(time_series)
                 df_aux = pd.DataFrame(remove_triangle(corr))
                 df_aux['Group'] = group
