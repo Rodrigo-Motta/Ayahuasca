@@ -4,7 +4,9 @@ import pandas as pd
 import numpy as np
 
 path = r'/Users/rodrigo/Side-Projects/Ayahuasca/Data/Controle/'
-parcel_path = '/Users/rodrigo/Side-Projects/Ayahuasca/Parcels_MNI_333.nii'
+#parcel_path = '/Users/rodrigo/Side-Projects/Ayahuasca/Parcels_MNI_333.nii'
+parcel_path = '/Users/rodrigo/Side-Projects/Ayahuasca/CC200.nii'
+
 groups = os.listdir(path)
 groups.sort()
 df = pd.DataFrame()
@@ -25,7 +27,7 @@ for group in groups[1:]:
                 if all(word in img_path for word in ["Controle", "O", "before"]) == True:
                     time_series = parcel_exception(img_path, parcel_path)
                 else:
-                    time_series = parcel(img_path,parcel_path)
+                    time_series = parcel(img_path, parcel_path)
                 corr = correlation_matrix(time_series)
                 df_aux = pd.DataFrame(remove_triangle(corr))
                 df_aux['Group'] = group
@@ -35,6 +37,6 @@ for group in groups[1:]:
 
 
 df = df.replace(np.nan, 0.0)
-df.to_csv('/Users/rodrigo/Side-Projects/Ayahuasca/Data/corr_matrices.csv')
+df.to_csv('/Users/rodrigo/Side-Projects/Ayahuasca/Data/corr_matrices_cc200.csv')
 
 
