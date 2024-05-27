@@ -9,6 +9,7 @@ import networkx as nx
 
 df = pd.read_csv('/Users/rodrigo/Side-Projects/Ayahuasca/Data/corr_matrices.csv').drop(columns='Unnamed: 0')
 #df = pd.read_csv('/Users/rodrigo/Side-Projects/Ayahuasca/Data/corr_matrices_cc200.csv').drop(columns='Unnamed: 0')
+HRS = pd.read_csv('/Users/rodrigo/Side-Projects/Ayahuasca/Data/Ayahuasca_HRS.csv')
 N = 333
 
 
@@ -20,27 +21,7 @@ condition = (
 # Inverting the condition to keep rows that do NOT match the condition
 df = df[~condition]
 
-# df_before_o = df[(df.Time == 'before') & (df.Group == 'O')].replace(np.nan, 0.0).reset_index().iloc[:,2:-3]
-# df_after_o = df[(df.Time == 'after') & (df.Group == 'O')].replace(np.nan, 0.0).reset_index().iloc[:,2:-3]
-#
-# df_before_j = df[(df.Time == 'before') & (df.Group == 'J')].replace(np.nan, 0.0).reset_index().iloc[:,2:-3]
-# df_after_j = df[(df.Time == 'after') & (df.Group == 'J')].replace(np.nan, 0.0).reset_index().iloc[:,2:-3]
-#
-# plt.boxplot([df_before_o.std(axis=1),df_after_o.std(axis=1),df_before_j.std(axis=1),df_after_j.std(axis=1)])
-
 metrics = pd.DataFrame()
-
-def calculate_properties(size, row):
-    graph = nx.from_numpy_array(np.matrix(ut.reconstruct_symmetric_matrix(size, row)))
-    df_graph, global_properties = ut.graph_properties(graph)
-
-    return {
-    'Weighted Clustering Coefficient' : df_graph['Weighted Clustering Coefficient'].mean(),
-    'Weighted Eigenvector Centrality' : df_graph['Weighted Eigenvector Centrality'].mean(),
-    #'Weighted Closeness Centrality' : df_graph['Weighted Closeness Centrality'].mean(),
-    'Weighted Density' : global_properties['Weighted Density'],
-    'Assortativity (Weight Correlation)' : global_properties['Assortativity (Weight Correlation)']
-    }
 
 for g in ['O', 'J']:
     for i in ['before', 'after']:
@@ -49,7 +30,7 @@ for g in ['O', 'J']:
         aux['STD'] = X_fmri.std(axis=1)
         aux['MEAN'] = X_fmri.mean(axis=1)
 
-        #aux = aux.join(X_fmri.apply(calculate_properties, axis=1).apply(pd.Series))
+        #aux = aux.join(X_fmri.apply(ut.calculate_properties, axis=1).apply(pd.Series))
 
         y = aux.reset_index().iloc[:,0]
 
@@ -80,29 +61,15 @@ for g in ['O', 'J']:
         # for i in range(len(y.values)):
         #     my_dict_age[y.values[i]] = y_pred_aux_age[i]
 
-
 # Inter-subject
 # sns.boxplot(metrics, y='TEMP', x='Group', hue='Time')
 # plt.show()
 
 # Intra-subject
-def calculate_diff(group_df, feature):
-    result = pd.DataFrame()
-
-    for group in ['O', 'J']:
-        # Pivot the table so that subjects are rows and 'before'/'after' are columns
-        pivot_df = group_df[group_df.Group == group].pivot(index="Subject", columns="Time", values=feature)
-        # Drop rows with missing values
-        pivot_df = pivot_df.dropna()
-        # Calculate the change in TEMP (after - before)
-        pivot_df["Change"] = pivot_df["after"] - pivot_df["before"]
-        pivot_df['Group'] = group
-
-        result = pd.concat([result, pivot_df])
-    return result
-
 # Apply the function to each group using groupby
-result = calculate_diff(metrics, "TEMP")
+result = ut.calculate_diff(metrics, "TEMP")
+
+result = pd.merge(result.reset_index(), HRS, how='left', on=['Group', 'Subject'])
 
 group_o = result[result.Group == 'O']
 group_j = result[result.Group == 'J']
@@ -112,16 +79,16 @@ print(stats.ttest_ind(group_o['Change'], group_j['Change']))
 
 plt.figure()
 # Display the resulting DataFrame
-sns.boxplot(result.reset_index(), x='Group', y='Change')
-sns.swarmplot(result.reset_index(), x='Group', y='Change')
+sns.boxplot(result, x='Group', y='Change')
+sns.swarmplot(result, x='Group', y='Change')
 plt.ylabel('Delta T')
 plt.show()
 
 plt.figure()
-ayahuasca = group_j.after
-placebo = group_o.after
-arr = [ayahuasca,placebo]
-print(stats.ttest_ind(ayahuasca, placebo))
+ayahuasca = group_j[['Subject','after']]
+placebo = group_o[['Subject', 'after']]
+arr = [ayahuasca.after, placebo.after]
+print(stats.ttest_ind(ayahuasca.after, placebo.after))
 g = sns.boxplot(arr)
 g.set_xticks(range(len(arr))) # <--- set the ticks first
 g.set_xticklabels(['Ayahuasca', 'Placebo'])
@@ -130,8 +97,8 @@ plt.ylim(2.20, 2.55)
 plt.show()
 
 
-ayahuasca = pd.DataFrame(group_j.Change).reset_index()
-placebo = pd.DataFrame(group_o.Change).reset_index()
+ayahuasca = group_j[['Subject', 'Change']]
+placebo = group_o[['Subject', 'Change']]
 
 plt.figure(figsize=(10,5))
 # Calculate the mean
@@ -172,3 +139,29 @@ plt.axhline(y=mean_value, color='black', linestyle='--', label='Mean')
 plt.ylim(-.170,.170)
 plt.legend()
 plt.show()
+
+X = group_j[['Volition_average','Cognition_average', 'Perception_average','Somaesthesia_average',
+             'Intensity_average','Affect_average', 'Volition_std', 'Cognition_std', 'Perception_std', 'Somaesthesia_std',
+             'Intensity_std', 'Affect_std']]
+
+for dep_variable in ['Change', 'after','before']:
+    for group in ['O', 'J']:
+
+        print('################ Group {}, Depedent Variable {} ##################'.format(group, dep_variable))
+        y = result[result.Group == group][dep_variable]
+        X = result[result.Group == group][['Volition_average', 'Cognition_average', 'Perception_average', 'Somaesthesia_average',
+                     'Intensity_average', 'Affect_average', 'Volition_std', 'Cognition_std', 'Perception_std',
+                     'Somaesthesia_std',
+                     'Intensity_std', 'Affect_std']]
+
+        X = (X - X.min(axis=0)) / (X.max(axis=0) - X.min(axis=0))
+        y = (y - y.min(axis=0)) / (y.max(axis=0) - y.min(axis=0))
+
+        import statsmodels.api as sm
+
+        X = sm.add_constant(X)
+        mod = sm.OLS(y, X).fit()
+        pred = mod.predict(X)
+
+        print(mod.summary())
+

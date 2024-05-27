@@ -199,7 +199,6 @@ def compute_KNN_graph(matrix, k_degree=10):
 
     return A
 
-
 def adjacency(dist, idx):
     m, k = dist.shape
     assert m, k == idx.shape
@@ -219,7 +218,6 @@ def adjacency(dist, idx):
     W = W - W.multiply(bigger) + W.T.multiply(bigger)
 
     return W.todense()
-
 
 def create_graph(X_train, X_test, y_train, y_test, size=190, method={'knn': 10}):
     train_data = []
@@ -297,7 +295,6 @@ def create_graph(X_train, X_test, y_train, y_test, size=190, method={'knn': 10})
 
     return train_data, val_data
 
-
 def create_batch(train_data, val_data, batch_size):
     train_loader = DataLoader(train_data, batch_size)  # Shuffle=True
 
@@ -351,3 +348,31 @@ def graph_properties(graph):
 
 
     return df, global_metrics
+
+def calculate_properties(size, row):
+    graph = nx.from_numpy_array(np.matrix(reconstruct_symmetric_matrix(size, row)))
+    df_graph, global_properties = graph_properties(graph)
+
+    return {
+    'Weighted Clustering Coefficient' : df_graph['Weighted Clustering Coefficient'].mean(),
+    'Weighted Eigenvector Centrality' : df_graph['Weighted Eigenvector Centrality'].mean(),
+    #'Weighted Closeness Centrality' : df_graph['Weighted Closeness Centrality'].mean(),
+    'Weighted Density' : global_properties['Weighted Density'],
+    'Assortativity (Weight Correlation)' : global_properties['Assortativity (Weight Correlation)']
+    }
+
+def calculate_diff(group_df, feature):
+    result = pd.DataFrame()
+
+    for group in ['O', 'J']:
+        # Pivot the table so that subjects are rows and 'before'/'after' are columns
+        pivot_df = group_df[group_df.Group == group].pivot(index="Subject", columns="Time", values=feature)
+        # Drop rows with missing values
+        pivot_df = pivot_df.dropna()
+        # Calculate the change in TEMP (after - before)
+        pivot_df["Change"] = pivot_df["after"] - pivot_df["before"]
+        pivot_df['Group'] = group
+
+        result = pd.concat([result, pivot_df])
+    return result
+
