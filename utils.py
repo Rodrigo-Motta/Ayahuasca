@@ -376,3 +376,328 @@ def calculate_diff(group_df, feature):
         result = pd.concat([result, pivot_df])
     return result
 
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+import seaborn as sns
+from scipy.sparse import coo_matrix
+import torch
+import torch_geometric
+from torch_geometric.data import Data
+from torch_geometric.utils import dense_to_sparse
+from sklearn.metrics import confusion_matrix
+from sklearn.metrics import accuracy_score, precision_score, recall_score, roc_auc_score
+from sklearn.metrics import mean_absolute_error,mean_squared_error, r2_score
+from sklearn.model_selection import cross_validate
+from tqdm import tqdm
+from torch_geometric.loader import DataLoader
+from sklearn.metrics import roc_curve, auc
+
+def remove_triangle(df):
+    """
+    Removes the upper triangle and diagonal of a symmetric matrix.
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+        DataFrame containing the symmetric matrix.
+
+    Returns
+    -------
+    np.ndarray
+        Flattened array with the upper triangle and diagonal removed.
+    """
+    # Convert to float
+    df = df.astype(float)
+    # Set the upper triangle and diagonal to NaN
+    df.values[np.triu_indices_from(df, k=1)] = np.nan
+    # Flatten the lower triangle
+    df = ((df.T).values.reshape((1, (df.shape[0]) ** 2)))
+    # Remove NaN values and values equal to 1
+    df = df[~np.isnan(df)]
+    df = df[df != 1]
+    return df.reshape((1, len(df)))
+
+
+def reconstruct_symmetric_matrix(size, upper_triangle_array, diag=1):
+    """
+    Reconstructs a symmetric matrix from the upper triangle array.
+
+    Parameters
+    ----------
+    size : int
+        Size of the matrix.
+    upper_triangle_array : np.ndarray
+        Array containing the upper triangle values.
+    diag : int, optional
+        Value to set the diagonal elements (default is 1).
+
+    Returns
+    -------
+    np.ndarray
+        Reconstructed symmetric matrix.
+    """
+    result = np.zeros((size, size))
+    result[np.triu_indices_from(result, 1)] = upper_triangle_array
+    result = result + result.T
+    np.fill_diagonal(result, diag)
+    return result
+
+
+def upper_triangle_array(df):
+    """
+    Extracts the upper triangle of a symmetric matrix.
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+        DataFrame containing the symmetric matrix.
+
+    Returns
+    -------
+    np.ndarray
+        Flattened array of the upper triangle values.
+    """
+    df = df.astype(float)
+    matrix = df.values
+    result = matrix[np.triu_indices_from(matrix, 1)]
+    return result.reshape(1, len(result))
+
+
+def DMN_extraction(X):
+    """
+    Extracts the Default Mode Network (DMN) from the data.
+
+    Parameters
+    ----------
+    X : pd.DataFrame
+        DataFrame containing the data.
+
+    Returns
+    -------
+    pd.DataFrame
+        DataFrame containing the extracted DMN data.
+    pd.DataFrame
+        DataFrame containing the DMN labels.
+    """
+    default = pd.read_excel(r'/Users/rodrigo/Post-Grad/BHRC/Parcels_Joao/Parcels.xlsx')
+    default = default[default.Community == 'Default']
+    arr_aux = np.zeros((len(X), int((len(default) ** 2 - len(default)) / 2)))
+    roi_labels = default['ParcelID'].values  # Adjust these labels as needed
+
+    for i in range(len(X)):
+        # Reconstruct symmetric matrix and extract the DMN region
+        aux = (pd.DataFrame(reconstruct_symmetric_matrix(333, X.iloc[i].values))
+        .loc[roi_labels, roi_labels])
+        aux = remove_triangle(aux)
+        arr_aux[i] = aux.ravel().reshape(1, -1)
+
+    return pd.DataFrame(arr_aux), default
+
+
+def compute_KNN_graph(matrix, k_degree=10):
+    """
+    Calculates the adjacency matrix from the connectivity matrix using k-NN.
+
+    Parameters
+    ----------
+    matrix : np.ndarray
+        Connectivity matrix.
+    k_degree : int, optional
+        Number of nearest neighbors (default is 10).
+
+    Returns
+    -------
+    np.ndarray
+        Adjacency matrix.
+    """
+    matrix = np.abs(matrix)
+    idx = np.argsort(-matrix)[:, 0:k_degree]
+    matrix.sort()
+    matrix = matrix[:, ::-1]
+    matrix = matrix[:, 0:k_degree]
+
+    A = adjacency(matrix, idx).astype(np.float32)
+
+    return A
+
+
+def adjacency(dist, idx):
+    """
+    Creates a weight matrix for the k-NN graph.
+
+    Parameters
+    ----------
+    dist : np.ndarray
+        Distance matrix.
+    idx : np.ndarray
+        Indices of the k nearest neighbors.
+
+    Returns
+    -------
+    np.ndarray
+        Weight matrix.
+    """
+    m, k = dist.shape
+    assert m, k == idx.shape
+    assert dist.min() >= 0
+
+    I = np.arange(0, m).repeat(k)
+    J = idx.reshape(m * k)
+    V = dist.reshape(m * k)
+    W = coo_matrix((V, (I, J)), shape=(m, m))
+
+    W.setdiag(0)
+
+    bigger = W.T > W
+    W = W - W.multiply(bigger) + W.T.multiply(bigger)
+
+    return W.todense()
+
+
+def create_graph(X_train, X_test, y_train, y_test, size=190, method={'knn': 10}):
+    """
+    Creates graphs from the training and test data.
+
+    Parameters
+    ----------
+    X_train : pd.DataFrame
+        Training data.
+    X_test : pd.DataFrame
+        Test data.
+    y_train : pd.Series
+        Training labels.
+    y_test : pd.Series
+        Test labels.
+    size : int, optional
+        Size of the matrix (default is 190).
+    method : dict, optional
+        Method for defining edges (default is {'knn': 10}).
+
+    Returns
+    -------
+    list
+        List of training data graphs.
+    list
+        List of test data graphs.
+    """
+    train_data = []
+    val_data = []
+
+    for i in range(X_train.shape[0]):
+        Adj = reconstruct_symmetric_matrix(size, X_train.iloc[i, :].values)
+        A = Adj.copy()
+        Adj = torch.from_numpy(Adj).float()
+
+        if method is None:
+            A = A
+        elif list(method.keys())[0] == 'knn':
+            A = compute_KNN_graph(A, method['knn'])
+        elif list(method.keys())[0] == 'threshold':
+            A[A < method['threshold']] = 0
+            Adj[Adj < method['threshold']] = 0
+        elif list(method.keys())[0] == 'knn_group':
+            A = method['knn_group']
+
+        np.fill_diagonal(A, 0)
+        A = torch.from_numpy(A).float()
+        edge_index_A, edge_attr_A = dense_to_sparse(A)
+        train_data.append(Data(x=Adj, edge_index=edge_index_A, edge_attr=edge_attr_A.reshape(len(edge_attr_A), 1),
+                               y=torch.tensor(int(y_train.iloc[i]))))
+
+    for i in range(X_test.shape[0]):
+        Adj = reconstruct_symmetric_matrix(size, X_test.iloc[i, :].values)
+        A = Adj.copy()
+        Adj = torch.from_numpy(Adj).float()
+
+        if method is None:
+            A = A
+        elif list(method.keys())[0] == 'knn':
+            A = compute_KNN_graph(A, method['knn'])
+        elif list(method.keys())[0] == 'threshold':
+            A[A < method['threshold']] = 0
+            Adj[Adj < method['threshold']] = 0
+        elif list(method.keys())[0] == 'knn_group':
+            A = method['knn_group']
+
+        np.fill_diagonal(A, 0)
+        A = torch.from_numpy(A).float()
+        edge_index_A, edge_attr_A = dense_to_sparse(A)
+        val_data.append(Data(x=Adj, edge_index=edge_index_A, edge_attr=edge_attr_A.reshape(len(edge_attr_A), 1),
+                             y=torch.tensor(int(y_test.iloc[i]))))
+
+    return train_data, val_data
+
+
+def create_batch(train_data, val_data, batch_size):
+    """
+    Creates data loaders for training and validation data.
+
+    Parameters
+    ----------
+    train_data : list
+        List of training data graphs.
+    val_data : list
+        List of validation data graphs.
+    batch_size : int
+        Size of the batches.
+
+    Returns
+    -------
+    DataLoader
+        DataLoader for training data.
+    DataLoader
+        DataLoader for validation data.
+    """
+    train_loader = DataLoader(train_data, batch_size)
+    val_loader = DataLoader(val_data)
+    return train_loader, val_loader
+
+
+def create_pairs(df_train, df_test, n_pair_per_observation):
+    """
+    Creates pairs of observations for training and testing, ensuring pairs are not from the same observation.
+
+    Parameters
+    ----------
+    df_train : pd.DataFrame
+        Training data.
+    df_test : pd.DataFrame
+        Test data.
+    n_pair_per_observation : int, optional
+        Number of pairs per observation (default is 3).
+
+    Returns
+    -------
+    tuple
+        Tuple containing lists of training pairs (pair1, pair2), training labels,
+        test pairs (pair1, pair2), and test labels.
+    """
+    pair1, pair2, labels = [], [], []
+    pair1_test, pair2_test, labels_test = [], [], []
+
+    # Create training pairs
+    for _ in range(n_pair_per_observation):
+        for i in range(df_train.shape[0]):
+            pair1_aux = df_train.iloc[i, :].values
+            j = np.random.randint(0, df_train.shape[0])
+            while j == i:  # Ensure the second index is not the same as the first
+                j = np.random.randint(0, df_train.shape[0])
+            pair2_aux = df_train.iloc[j, :].values
+            pair1.append(pair1_aux[:-1])
+            pair2.append(pair2_aux[:-1])
+            labels.append(abs(pair1_aux[-1] - pair2_aux[-1]))
+
+    # Create testing pairs
+    for _ in range(n_pair_per_observation):
+        for i in range(df_test.shape[0]):
+            pair1_aux = df_test.iloc[i, :].values
+            j = np.random.randint(0, df_test.shape[0])
+            while j == i:  # Ensure the second index is not the same as the first
+                j = np.random.randint(0, df_test.shape[0])
+            pair2_aux = df_test.iloc[j, :].values
+            pair1_test.append(pair1_aux[:-1])
+            pair2_test.append(pair2_aux[:-1])
+            labels_test.append(abs(pair1_aux[-1] - pair2_aux[-1]))
+
+    return pair1, pair2, labels, pair1_test, pair2_test, labels_test

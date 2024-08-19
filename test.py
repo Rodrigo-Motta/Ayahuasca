@@ -1,15 +1,15 @@
 import pandas as pd
 import utils as ut
 import numpy as np
-from model import GCN
+from sgnn.model import GCN
 import torch
 import seaborn as sns
 import matplotlib.pyplot as plt
 import networkx as nx
 
-df = pd.read_csv('/Users/rodrigo/Side-Projects/Ayahuasca/Data/corr_matrices.csv').drop(columns='Unnamed: 0')
-#df = pd.read_csv('/Users/rodrigo/Side-Projects/Ayahuasca/Data/corr_matrices_cc200.csv').drop(columns='Unnamed: 0')
-HRS = pd.read_csv('/Users/rodrigo/Side-Projects/Ayahuasca/Data/Ayahuasca_HRS.csv')
+
+df = pd.read_csv('/Users/rodrigo/Documents/data/Ayahuasca/data/ayahuasca_acute_preacute/corr_matrices.csv').drop(columns='Unnamed: 0')
+HRS = pd.read_csv('/Users/rodrigo/Documents/data/ayahuasca_acute_preacute/Ayahuasca_HRS.csv')
 N = 333
 
 
