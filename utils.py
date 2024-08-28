@@ -96,7 +96,7 @@ def parcel_exception(file_path, parcel_path):
 
     img = nib.load(file_path).slicer[:,:,:,int(t_r*2):]
 
-    solver = nib.load('/Users/rodrigo/Side-Projects/Ayahuasca/Data/Controle/O/6/before/swau6_RS.nii').slicer[:,:,:,2:]
+    solver = nib.load('/Users/rodrigo/Documents/data/Ayahuasca/data/subacute/Placebo/6/before/swau6_RS.nii').slicer[:,:,:,2:]
 
     # Access the image data and header
     data = img.get_fdata()
@@ -364,7 +364,7 @@ def calculate_properties(size, row):
 def calculate_diff(group_df, feature):
     result = pd.DataFrame()
 
-    for group in ['O', 'J']:
+    for group in ['Placebo', 'Ayahuasca']:
         # Pivot the table so that subjects are rows and 'before'/'after' are columns
         pivot_df = group_df[group_df.Group == group].pivot(index="Subject", columns="Time", values=feature)
         # Drop rows with missing values
