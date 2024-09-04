@@ -168,10 +168,6 @@ class GraphMetrics:
             'modularity': self.calculate_modularity(),
             'assortativity': self.calculate_assortativity(),
         }
-
-
-    def calculate_community_metrics(self, df):
-                return community_metrics
     
 
     def calculate_segregation(self, nodes_in_community):
@@ -290,7 +286,7 @@ class GraphMetrics:
                     'segregation': self.calculate_segregation(nodes_in_community),
                     'average_clustering': nx.average_clustering(subgraph, weight='weight') if subgraph.number_of_nodes() > 1 else 0,
                     'average_betweenness_centrality': np.mean(list(nx.betweenness_centrality(subgraph, weight='weight').values())) if subgraph.number_of_nodes() > 0 else 0,
-                    'spectral_entropy': self.calculate_spectral_entropy(subgraph),
+                    #'spectral_entropy': self.calculate_spectral_entropy(subgraph),
                     'average_path_lenght' : self.calculate_average_path_length_subgraph(subgraph),
                     'average_degree' : self.calculate_average_degree(subgraph)
                     }
@@ -340,77 +336,9 @@ class GraphMetrics:
         metrics = {
             'average_clustering': nx.average_clustering(subgraph, weight='weight') if subgraph.number_of_nodes() > 1 else 0,
             'average_betweenness_centrality': np.mean(list(nx.betweenness_centrality(subgraph, weight='weight').values())) if subgraph.number_of_nodes() > 0 else 0,
-            'spectral_entropy': self.calculate_spectral_entropy(subgraph),
+            #'spectral_entropy': self.calculate_spectral_entropy(subgraph),
             'average_path_length': self.calculate_average_path_length_subgraph(subgraph),
             'average_degree': self.calculate_average_degree(subgraph)  # New metric
         }
 
         return metrics
-
-
-    # def calculate_community_metrics(self, df):
-    #     """
-    #     Calculate graph metrics for each community defined in the DataFrame.
-
-    #     Parameters
-    #     ----------
-    #     df : pandas.DataFrame
-    #         DataFrame containing 'ParcelID' and 'Community' columns.
-
-    #     Returns
-    #     -------
-    #     dict
-    #         A dictionary where keys are community names and values are dictionaries
-    #         containing graph metrics for the corresponding community.
-    #     """
-    #     community_metrics = {}
-    #     communities = df['Community'].unique()
-
-    #     for community in communities:
-    #         nodes_in_community = df[df['Community'] == community]['ParcelID'].values - 1
-
-    #         subgraph = self.graph.subgraph(nodes_in_community)
-
-    #         if subgraph.number_of_edges() == 0:
-    #             community_metrics[community] = {
-    #                 'global_efficiency': 0,
-    #                 'average_clustering': 0,
-    #                 'modularity': 0,
-    #                 'assortativity': 0,
-    #                 'average_degree_centrality': 0,
-    #                 'average_betweenness_centrality': 0,
-    #                 'average_closeness_centrality': 0,
-    #                 'average_eigenvector_centrality': 0,
-    #                 'average_local_efficiency': 0
-    #             }
-    #             continue
-
-    #         try:
-    #             metrics = {
-    #                 'global_efficiency': nx.global_efficiency(subgraph) if subgraph.number_of_nodes() > 1 else 0,
-    #                 'average_clustering': nx.average_clustering(subgraph, weight='weight') if subgraph.number_of_nodes() > 1 else 0,
-    #                 'modularity': community_louvain.modularity(community_louvain.best_partition(subgraph), subgraph) if subgraph.number_of_edges() > 0 else 0,
-    #                 'assortativity': nx.degree_assortativity_coefficient(subgraph, weight='weight') if subgraph.number_of_edges() > 0 else 0,
-    #                 'average_degree_centrality': np.mean(list(nx.degree_centrality(subgraph).values())) if subgraph.number_of_nodes() > 0 else 0,
-    #                 'average_betweenness_centrality': np.mean(list(nx.betweenness_centrality(subgraph, weight='weight').values())) if subgraph.number_of_nodes() > 0 else 0,
-    #                 'average_closeness_centrality': np.mean(list(nx.closeness_centrality(subgraph, distance='weight').values())) if subgraph.number_of_nodes() > 0 else 0,
-    #                 'average_eigenvector_centrality': np.mean(list(nx.eigenvector_centrality_numpy(subgraph, weight='weight').values())) if subgraph.number_of_nodes() > 1 else 0,
-    #                 'average_local_efficiency': np.mean([nx.local_efficiency(subgraph.subgraph(subgraph[node])) for node in subgraph]) if subgraph.number_of_nodes() > 1 else 0
-    #             }
-    #         except ValueError as e:
-    #             print(f"Error calculating metrics for community {community}: {e}")
-    #             metrics = {
-    #                 'global_efficiency': 0,
-    #                 'average_clustering': 0,
-    #                 'modularity': 0,
-    #                 'assortativity': 0,
-    #                 'average_degree_centrality': 0,
-    #                 'average_betweenness_centrality': 0,
-    #                 'average_closeness_centrality': 0,
-    #                 'average_eigenvector_centrality': 0,
-    #                 'average_local_efficiency': 0
-    #             }
-
-    #         community_metrics[community] = metrics
-
-    #     return community_metrics
